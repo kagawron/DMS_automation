@@ -10,15 +10,16 @@ import boto3
 import config 
 from settings import task_settings
 
-# AWS CLI profile name
-session = boto3.Session(profile_name=config.profile,region_name=config.region)
+# Setup the AWS CLI session using stored credentials if provided
+if config.profile != '': 
+    session = boto3.Session(profile_name=profile,region_name=region)
+
 client = session.client('dms')
 sns = session.client('sns')
 
 # ----------------------------------------------------------------------------------------------------------------------#
 # Initial setup
 # ----------------------------------------------------------------------------------------------------------------------#
-# noinspection PyBroadException
 try:
     # Create logs, json_files if don't exist
     if not os.path.exists('logs'):
@@ -27,16 +28,17 @@ try:
     if not os.path.exists('json_files'):
         os.mkdir('json_files')
 except Exception as error:
-    print('Something went wrong while creating directories logs, json_files')
+    print('Something went wrong while creating directories logs, json_files. Check permissions or try to manually create the folders "logs" and "json_files')
     sys.exit(1)
 
 # Create file to store task ARNs
-task_arn_file = 'task_arn.txt'
+task_name = sys.argv[2]
+task_arn_file = 'task_arn' + task_name + '.txt'
 
 # ----------------------------------------------------------------------------------------------------------------------#
 # Setup logging
 # ----------------------------------------------------------------------------------------------------------------------#
-logfile_location = 'logs/dms_automation.log'
+logfile_location = 'logs/output.log'
 log_level = logging.DEBUG
 log_format = '%(asctime)s %(levelname)s: [in %(filename)s:%(lineno)d] : %(message)s'
 
@@ -63,25 +65,20 @@ Filter = collections.namedtuple('Filter', 'column, operator, value')
 # holds tables that have filter conditions
 filter_tables = []
 
-# This is a map with key as schema name.this map holds all the tables under a
-# schema.
+# This is a map with key as schema name. This map holds all the tables under a schema.
 non_filter_tables = {}
 
 
 def delete_json_files():
-    """
-     Deletes json files in "json_files" directory.
-    """
+     # Deletes json files in "json_files" directory from a previous run.
+
     for file in os.listdir('./json_files'):
         os.remove(os.path.join('.', 'json_files', file))
         print('File {} deleted'.format(file))
 
 
 def add_to_non_filter_tables(schema, obj):
-    """
-     Adds a table object to the dict.
-    """
-
+    # Adds a table object to the dictionary.
     # Create an entry for the schema.
     if schema not in non_filter_tables.keys():
         non_filter_tables[schema] = []
@@ -103,18 +100,20 @@ def process_csv_file(csv_file, action):
         for line in in_file:
             # Following cases fall into this category.
             #  1. Table with no filter conditions
-            #  2. All tables in a schema (E.g., HR,%)
+            #  2. All tables in a schema (E.g. HR,%)
+
+            # Handle the tables with no filter conditions
             if len(line.split(',')) == 2:
                 schema, table = line.split(',')
 
-                # Remove any special chars
+                # Remove any special chars and store the schema and table details
                 schema = schema.strip()
                 table = table.strip('\n').strip()
                 table_obj = Table(schema=schema, table=table, filters=[], auto_partitioned=False)
-
+               
                 add_to_non_filter_tables(schema, table_obj)
 
-            # These are the tables with filter conditions.
+            # Handle the tables with filter conditions
             if len(line.split(',')) > 3:
                 cols = line.split(',')
                 schema, table = cols[0], cols[1]          # First two positions have schema, table respectively.
@@ -538,19 +537,19 @@ def send_mail(message):
 
 
 if __name__ == "__main__":
-    if len(sys.argv) == 2 and sys.argv[1] == '--run-tasks':
+    if len(sys.argv) == 3 and sys.argv[1] == '--run-tasks':
         start_dms_tasks()
         sys.exit(0)
 
-    if len(sys.argv) == 2 and sys.argv[1] == '--delete-tasks':
+    if len(sys.argv) == 3 and sys.argv[1] == '--delete-tasks':
         delete_dms_tasks()
         sys.exit(0)
 
-    if len(sys.argv) == 2 and sys.argv[1] == '--list-tasks':
+    if len(sys.argv) == 3 and sys.argv[1] == '--list-tasks':
         list_dms_tasks()
         sys.exit(0)
 
-    if len(sys.argv) == 2 and sys.argv[1] == '--create-tasks':
+    if len(sys.argv) == 3 and sys.argv[1] == '--create-tasks':
         logger.debug('{0:25} : {1:40}'.format('CSV File', config.csv_tables_location))
         logger.debug('{0:25} : {1:40}'.format('replication_task_settings', config.replication_task_settings))
         logger.debug('{0:25} : {1:40}'.format('replication_instance_arn', config.replication_instance_arn))
@@ -561,5 +560,5 @@ if __name__ == "__main__":
         sys.exit(0)
 
     print('Check the config.py file contains the required parameters')
-    print('Usage: python dms_task_creator.py [--create-tasks | --run-tasks | --delete-tasks | --list-tasks]')
+    print('Usage: python dms_task_creator.py [--create-tasks | --run-tasks | --delete-tasks | --list-tasks] task-name')
     sys.exit(0)
