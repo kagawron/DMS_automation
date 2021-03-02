@@ -41,21 +41,18 @@ SCOTT,SALGRADE
 SCOTT,DEPT
 ```
 
-****
-## Example
-
 `example.csv` contains example formatting for the include.csv file with complete options for partitions and filters
 
-### 
+****
+
+## Example
 ```sh
-─
 PythonEnv % python /Users/kagawron/Documents/DMS_automation/task_creation.py
 Check the config.py file contains the required parameters
 Usage: python dms_task_creator.py [--create-tasks | --run-tasks | --delete-tasks | --list-tasks] task-name
 ``` 
 
 ```sh
-─
 PythonEnv % python /Users/kagawron/Documents/DMS_automation/task_creation.py --create-tasks DMSTASK1
 Clearing up old files:
 Creating the DMS tasks:
@@ -65,45 +62,37 @@ DMS task is being created for file: DMSTASK1-SCOTT-all_tables.json. This may tak
 ```
 
 ```sh
-─
 PythonEnv % python /Users/kagawron/Documents/DMS_automation/task_creation.py --list-tasks DMSTASK1
 Name: dmstask1-scott-emp-2005-01-01  ARN: arn:aws:dms:eu-west-2:999999999999:task:ARQULLKS5APOH55WPWQEFJYWL5FMV3CCV7THMLI     Status: ready                         
 Name: dmstask1-scott-all-tables      ARN: arn:aws:dms:eu-west-2:999999999999:task:YWHESPEUDCZCE6XR6OGGWPKVJK7M4QIQWMM6HKQ     Status: ready           
 ```
 
 ```sh
-─
 PythonEnv % python /Users/kagawron/Documents/DMS_automation/task_creation.py --run-tasks DMSTASK1
 Task: arn:aws:dms:eu-west-2:999999999999:task:ARQULLKS5APOH55WPWQEFJYWL5FMV3CCV7THMLI has been started
 Task: arn:aws:dms:eu-west-2:999999999999:task:YWHESPEUDCZCE6XR6OGGWPKVJK7M4QIQWMM6HKQ has been started
 2 tasks have been started
 ```
 
-
-
 ```sh
-─
 PythonEnv % python /Users/kagawron/Documents/DMS_automation/task_creation.py --list-tasks DMSTASK1
 Name: dmstask1-scott-emp-2005-01-01  ARN: arn:aws:dms:eu-west-2:999999999999:task:ARQULLKS5APOH55WPWQEFJYWL5FMV3CCV7THMLI     Status: starting                       
 Name: dmstask1-scott-all-tables      ARN: arn:aws:dms:eu-west-2:999999999999:task:YWHESPEUDCZCE6XR6OGGWPKVJK7M4QIQWMM6HKQ     Status: starting                               
 ```
 
 ```sh
-─
 PythonEnv % python /Users/kagawron/Documents/DMS_automation/task_creation.py --list-tasks DMSTASK1
 Name: dmstask1-scott-emp-2005-01-01  ARN: arn:aws:dms:eu-west-2:919405152227:task:ARQULLKS5APOH55WPWQEFJYWL5FMV3CCV7THMLI     Status: running                       
 Name: dmstask1-scott-all-tables      ARN: arn:aws:dms:eu-west-2:919405152227:task:YWHESPEUDCZCE6XR6OGGWPKVJK7M4QIQWMM6HKQ     Status: running 
 ```
 
 ```sh
-─
 PythonEnv % python /Users/kagawron/Documents/DMS_automation/task_creation.py --list-tasks DMSTASK1
 Name: dmstask1-scott-emp-2005-01-01  ARN: arn:aws:dms:eu-west-2:919405152227:task:ARQULLKS5APOH55WPWQEFJYWL5FMV3CCV7THMLI     Status: stopped                       
 Name: dmstask1-scott-all-tables      ARN: arn:aws:dms:eu-west-2:919405152227:task:YWHESPEUDCZCE6XR6OGGWPKVJK7M4QIQWMM6HKQ     Status: stopped 
 ```
 
 ```sh
-─
 PythonEnv % python /Users/kagawron/Documents/DMS_automation/task_creation.py --delete-tasks DMSTASK1
 Task: arn:aws:dms:eu-west-2:919405152227:task:ARQULLKS5APOH55WPWQEFJYWL5FMV3CCV7THMLI deletion in progress...
 Task: arn:aws:dms:eu-west-2:919405152227:task:YWHESPEUDCZCE6XR6OGGWPKVJK7M4QIQWMM6HKQ deletion in progress...
