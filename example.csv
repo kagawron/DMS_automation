@@ -1,0 +1,23 @@
+# All tables under a schema handled in 1 DMS task
+# SCHEMA,%
+SCOTT,%
+
+
+# Specific tables under a schema handled in individual DMS tasks per table
+# SCHEMA,TABLE
+SCOTT,EMP
+SCOTT,EMPGRADE
+SCOTT,DEPT
+
+
+# Specific table under a schema with filters for each DMS task
+# SCHEMA,TABLE,FILTER COLUMN,FILTER TYPE,FILTER VALUES
+SCOTT,EMP,HIRE_DATE,BETWEEN,2012-01-01,2012-12-31
+SCOTT,EMP,HIRE_DATE,GTE,2012-12-31
+SCOTT,EMP,HIRE_DATE,STE,2012-01-01
+
+
+# Specific tables with partitions using auto-partition setting in DMS
+SCOTT,EMP,partitions-auto
+SCOTT,EMPGRADE,partitions-auto
+SCOTT,DEPT,partitions-auto

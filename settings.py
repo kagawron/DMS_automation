@@ -3,11 +3,11 @@ task_settings = """
     "TargetMetadata": {
         "TargetSchema": "",
         "SupportLobs": true,
-        "FullLobMode": false,
-        "LobChunkSize": 0,
-        "LimitedSizeLobMode": true,
-        "LobMaxSize": 32,
-        "InlineLobMaxSize": 0,
+        "FullLobMode": true,
+        "LobChunkSize": 64,
+        "LimitedSizeLobMode": false,
+        "LobMaxSize":0,
+        "InlineLobMaxSize": 32,
         "LoadMaxFileSize": 0,
         "ParallelLoadThreads": 0,
         "ParallelLoadBufferSize": 0,
@@ -19,7 +19,7 @@ task_settings = """
         "ParallelApplyQueuesPerThread": 0
     },
     "FullLoadSettings": {
-        "TargetTablePrepMode": "TRUNCATE",
+        "TargetTablePrepMode": "TRUNCATE_BEFORE_LOAD",
         "CreatePkAfterFullLoad": false,
         "StopTaskCachedChangesApplied": false,
         "StopTaskCachedChangesNotApplied": false,

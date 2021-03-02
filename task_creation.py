@@ -3,6 +3,7 @@ import json
 import logging
 import os
 import sys
+from pathlib import Path
 from logging.handlers import RotatingFileHandler
 
 import boto3
@@ -10,10 +11,8 @@ import boto3
 import config 
 from settings import task_settings
 
-# Setup the AWS CLI session using stored credentials if provided
-if config.profile != '': 
-    session = boto3.Session(profile_name=profile,region_name=region)
-
+# Setup the AWS CLI session using stored credentials
+session = boto3.Session(profile_name=config.profile,region_name=config.region)
 client = session.client('dms')
 sns = session.client('sns')
 
@@ -22,18 +21,22 @@ sns = session.client('sns')
 # ----------------------------------------------------------------------------------------------------------------------#
 try:
     # Create logs, json_files if don't exist
+    os.chdir(config.csv_tables_location)
     if not os.path.exists('logs'):
         os.mkdir('logs')
 
     if not os.path.exists('json_files'):
         os.mkdir('json_files')
+
 except Exception as error:
     print('Something went wrong while creating directories logs, json_files. Check permissions or try to manually create the folders "logs" and "json_files')
     sys.exit(1)
 
+
+
 # Create file to store task ARNs
 task_name = sys.argv[2]
-task_arn_file = 'task_arn' + task_name + '.txt'
+task_arn_file = 'task_arn_' + task_name + '.txt'
 
 # ----------------------------------------------------------------------------------------------------------------------#
 # Setup logging
@@ -69,12 +72,15 @@ filter_tables = []
 non_filter_tables = {}
 
 
-def delete_json_files():
-     # Deletes json files in "json_files" directory from a previous run.
+def delete_previous_files():
+     # Deletes json and task_arn files in working directory from a previous run.
+    print ('Clearing up old files:')
+
 
     for file in os.listdir('./json_files'):
-        os.remove(os.path.join('.', 'json_files', file))
-        print('File {} deleted'.format(file))
+        if file.startswith(task_name):
+            os.remove(os.path.join('.', 'json_files', file))
+            print('File {} deleted'.format(file))
 
 
 def add_to_non_filter_tables(schema, obj):
@@ -85,7 +91,7 @@ def add_to_non_filter_tables(schema, obj):
 
     # Append the table object.
     non_filter_tables[schema].append(obj)
-
+    
 
 def process_csv_file(csv_file, action):
     """
@@ -96,6 +102,7 @@ def process_csv_file(csv_file, action):
     task created for them. On the other hand, all tables with no filter conditions under a schema should be handled by
     a single DMS task.
     """
+
     with open(csv_file, 'r') as in_file:
         for line in in_file:
             # Following cases fall into this category.
@@ -213,7 +220,7 @@ def create_tasks_for_no_filter_tables(tables):
     for schema in schemas:
         data = dict()
         data['rules'] = []
-        file_name = schema + '.all_tables.json'
+        file_name = task_name + '-' + schema + '-all_tables.json'
 
         for table in tables[schema]:
             logger.debug('Processing table: {}.{}'.format(table.schema, table.table))
@@ -324,7 +331,7 @@ def create_tasks_for_filter_tables(tables):
         data['rules'].append(convert_tables_to_lowercase())
         data['rules'].append(convert_columns_to_lowercase())
 
-        file_name = '{}-{}-{}.json'.format(table.schema, table.table, part_of_filename)
+        file_name = '{}-{}-{}-{}.json'.format(task_name, table.schema, table.table, part_of_filename)
         file_name = file_name.replace('_', '-')
 
         with open(os.path.join('json_files', file_name), 'w') as fp:
@@ -347,6 +354,7 @@ def create_dms_task(task_id, table_mapping):
     """
     Creates AWS Data Migration Task and returns the ARN of created task
     """
+
     task_arn = ''
     try:
         response = client.create_replication_task(
@@ -363,45 +371,57 @@ def create_dms_task(task_id, table_mapping):
     except Exception as error:
         logger.error('Something went wrong while creating Replication task for task_id: {}'.format(task_id))
         logger.error(error)
+        print ('Something went wrong while creating Replication task for task_id: ' + task_id + '. Please review output.log for more information.')
+        sys.exit(1)
 
     return task_arn
 
 
 def process_json_files():
+    print ('Creating the DMS tasks:')
     """
     Reads all the json files and generates DMS tasks
     """
     arn_list = []
     count = 0
 
-    # Create tasks for all JSON files
+    # Create tasks for all JSON files        
     for json_file in os.listdir('json_files'):
-        file_handler = open(os.path.join('json_files', json_file), 'r')
-        table_mapping = json.dumps((json.load(file_handler)))
-        file_handler.close()
+        if json_file.startswith(task_name):
+            file_handler = open(os.path.join('json_files', json_file), 'r')
+            table_mapping = json.dumps((json.load(file_handler)))
+            file_handler.close()
 
-        task_id = json_file
+            task_id = json_file
 
-        # Replace special chars, otherwise AWS will complain.
-        task_id = task_id.replace('.json', '').replace('_', '-').replace('.', '-').strip()
-        task_arn = create_dms_task(task_id, table_mapping)
+            # Replace special chars, otherwise AWS will complain.
+            task_id = task_id.replace('.json', '').replace('_', '-').replace('.', '-').strip()
+            task_arn = create_dms_task(task_id, table_mapping)
 
-        if task_arn != '':
-            print('DMS task created for file: {}'.format(json_file))
-            arn_list.append(task_arn)
-        else:
-            count += 1
+            if task_arn != '':
+                print('DMS task is being created for file: {}. This may take a few minutes. Please wait.'.format(json_file))
+                arn_list.append(task_arn)
+            else:
+                count += 1
 
     # Wait for the tasks to be in "READY" state
     wait_for_status_change('replication_task_ready', arn_list)
-    print('{} tasks have been created and ready'.format(len(arn_list)))
+    print('{} tasks have been created and are ready to be run'.format(len(arn_list)))
+
+    # Delete any old task_arn files from previous runs
+    file = 'task_arn'+task_name+'.txt'
+
+    if os.path.isfile(file): 
+        os.remove(file)
 
     # Persist the ARNs in a file.
     with open(task_arn_file, 'w') as file_handle:
         [file_handle.write('%s\n' % arn) for arn in arn_list]
 
     if count > 0:
-        print('{} errors encountered while creating DMS tasks. Check the log file.'.format(count))
+        msg = '{} errors encountered while creating DMS tasks. Check the log file.'.format(count)
+        print(msg)
+        send_mail(msg)
     else:
         send_mail('{} tasks have been created and in ready state'.format(len(arn_list)))
 
@@ -426,6 +446,7 @@ def start_dms_tasks():
     arn_list = []
 
     # Read the task ARNs from "task_arn.txt" file and start the DMS tasks.
+
     with open(task_arn_file, 'r') as arn_file:
         for arn in arn_file:
             arn = arn.strip('\n')
@@ -466,23 +487,29 @@ def delete_dms_tasks():
     """
     count = 0
     arns_to_be_deleted = []
+    inputfile = Path(task_arn_file)
+    if inputfile.exists():
+        with open(task_arn_file, 'r') as arn_file:
+            for arn in arn_file:
+                arn = arn.strip('\n')
+                arns_to_be_deleted.append(arn)
 
-    with open(task_arn_file, 'r') as arn_file:
-        for arn in arn_file:
-            arn = arn.strip('\n')
-            arns_to_be_deleted.append(arn)
-
-            try:
-                response = client.delete_replication_task(
-                    ReplicationTaskArn=arn
-                )
-                print('Task: {} deletion in progress...'.format(arn))
-            except Exception as error:
-                count += 1
-                logger.error('Error deleting task with ARN: {}'.format(arn))
+                try:
+                    response = client.delete_replication_task(
+                        ReplicationTaskArn=arn
+                    )
+                    print('Task: {} deletion in progress...'.format(arn))
+                except Exception as error:
+                    count += 1
+                    logger.error('Error deleting task with ARN: {}'.format(arn))
+    else:
+        print ('There is no task arn file for that name. Check it again or create the tasks first calling: calling: "python ' + os.path.realpath(__file__) + ' --create-tasks ' + task_name + '"')
+        sys.exit(1)
 
     if count > 0:
-        print('{} errors encountered while deleting DMS tasks. Check the log file.'.format(count))
+        msg = '{} errors encountered while deleting DMS tasks. Check the log file.'.format(count)
+        print(msg)
+        send_mail(msg)
     else:
         wait_for_status_change('replication_task_deleted', arns_to_be_deleted)
 
@@ -492,14 +519,20 @@ def delete_dms_tasks():
 
 
 def create_dms_tasks():
-    delete_json_files()
+    delete_previous_files()
 
     # Identify the CSV files and process them
-    for file in os.listdir(config.csv_tables_location):
-        if file.startswith("include"):
-            process_csv_file(file, "include")
-        elif file.startswith("exclude"):
-            process_csv_file(file, "exclude")
+    inputfile = Path(config.csv_tables_location)
+
+    if inputfile.exists():
+        for file in os.listdir(config.csv_tables_location):
+                process_csv_file(file, "include")
+            elif file.startswith("exclude"):
+                process_csv_file(file, "exclude")
+    else:
+        msg = 'Could not locate the csv files to be loaded in the ' + config.csv_tables_location + ' directory'
+        print(msg)
+        send_mail(msg)
 
     # Print all tables
     print_tables()
@@ -510,22 +543,78 @@ def create_dms_tasks():
 
     logger.debug('JSON files have been created')
 
+    check_existing_tasks()
+
     # Create Replication tasks
     process_json_files()
 
 
+def check_existing_tasks():
+    # Check to make sure DMS tasks with the same name do not already exist
+    for json_file in os.listdir('json_files'):
+        if json_file.startswith(task_name):
+            task_id = json_file
+
+         # Replace special chars, otherwise AWS will complain.
+            task_id = task_id.replace('.json', '').replace('_', '-').replace('.', '-').strip()
+            try:
+                response = client.describe_replication_tasks(Filters=[
+                  {
+                     'Name': 'replication-task-id',
+                 'Values': [
+                     task_id,
+                 ]
+                },
+            ],
+                MaxRecords=100,
+                Marker='')
+
+                if response != '':
+                    print ('Task ID: ' + task_id + ' already exists. Please give a different name for your task or run these existing tasks by calling: "python ' + os.path.realpath(__file__) + ' --run-tasks ' + task_name + '"')
+                    sys.exit(1)
+
+            except Exception as error:
+                logger.error('No existing tasks found, continuing')
+
+
+
+
 def list_dms_tasks():
-    response = client.describe_replication_tasks(
-        MaxRecords=100
-    )
+    """
+    List DMS tasks. The tasks to be listed come from "task_arn.txt" file.
+    """
+    inputfile = Path(task_arn_file)
 
-    for task in response['ReplicationTasks']:
-        err_msg = ''
+    if inputfile.exists():
+        with open(task_arn_file, 'r') as arn_file:
+            for arn in arn_file:
+                arn = arn.strip('\n')
+                try:
+                    response = client.describe_replication_tasks(Filters=[
+                    {
+                    'Name': 'replication-task-arn',
+                    'Values': [
+                     arn,
+                    ]
+                    },
+                    ],
+                    MaxRecords=100,
+                    Marker='')
+                    for task in response['ReplicationTasks']:
+                        err_msg = ''
 
-        if 'LastFailureMessage' in task.keys():
-            err_msg = task['LastFailureMessage']
+                        if 'LastFailureMessage' in task.keys():
+                            err_msg = task['LastFailureMessage']
 
-        print('{0:50} {1:10} {2:30}'.format(task['ReplicationTaskArn'], task['Status'], err_msg))
+                        print('Name: {0:30} ARN: {1:20}     Status: {2:30}'.format(task['ReplicationTaskIdentifier'],task['ReplicationTaskArn'], task['Status'], err_msg))
+
+                except Exception as error:
+                    logger.error('Error listing task with ARN: {}'.format(arn))
+                    print ('There was an error listing tasks. Please check manually.')
+
+    else:
+        print ('There is no task arn file for that name. Check it again or create the tasks first calling: calling: "python ' + os.path.realpath(__file__) + ' --create-tasks ' + task_name + '"')
+        sys.exit(1)
 
 
 def send_mail(message):
