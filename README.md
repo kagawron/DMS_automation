@@ -13,7 +13,7 @@ and manual task creation using Web console can be avoided which improves efficie
 - ARN for the DMS endpoints created for the source and target databases
 - ARN for the DMS replication instance created
 
-## `Configuration`
+## Configuration
 
 ### `config.py`
 - First configure `config.py` file with ARNs of Source end point, Target endpoint, and Replication Instance.
@@ -43,6 +43,8 @@ SCOTT,DEPT
 
 ****
 ## Example
+
+`example.csv` contains example formatting for the include.csv file with complete options for partitions and filters
 
 ### 
 ```sh
